@@ -1,0 +1,25 @@
+repos:
+  # Basic whitespace / formatting sanity
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+
+  # Local hooks for justfile
+  - repo: local
+    hooks:
+      # 1) Auto-fix: convert leading spaces to tabs in justfile
+      - id: fix-justfile-indentation
+        name: Fix justfile indentation (convert leading spaces to tabs)
+        entry: python3 scripts/fix_justfile_indent.py
+        language: system
+        files: ^justfile$
+
+      # 2) Validate: ensure no leading spaces remain
+      - id: check-justfile-indentation
+        name: Check justfile indentation (tabs only for recipe lines)
+        entry: python3 scripts/check_justfile_indent.py
+        language: system
+        files: ^justfile$
