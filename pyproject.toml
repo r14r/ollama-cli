@@ -5,5 +5,36 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "detect-secrets>=1.5.0",
     "pre-commit>=4.5.0",
+    "ruff>=0.14.8",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+# Enable everything Black would do
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# Enable isort behavior
+[tool.ruff.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+known-first-party = ["your_package_name"]
+
+# Enable or disable rule sets
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "N",     # pep8-naming
+]
+ignore = []
