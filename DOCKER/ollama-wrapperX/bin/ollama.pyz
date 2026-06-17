@@ -1,0 +1,575 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import os
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import requests
+from bs4 import BeautifulSoup, Tag
+
+
+SERVICE = os.environ.get("OLLAMA_COMPOSE_SERVICE", "ollama")
+PROJECT_NAME = os.environ.get("OLLAMA_PROJECT_NAME", "ai-tools-ollama")
+DEBUG_ENABLED = os.environ.get("OLLAMA_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+
+LAUNCH_MODELS = {
+    "claude": os.environ.get("OLLAMA_LAUNCH_CLAUDE_MODEL", "qwen2.5:7b-instruct"),
+    "opencode": os.environ.get("OLLAMA_LAUNCH_OPENCODE_MODEL", "qwen2.5:7b-instruct"),
+    "chat": os.environ.get("OLLAMA_LAUNCH_CHAT_MODEL", "mistral:7b-instruct"),
+    "fast": os.environ.get("OLLAMA_LAUNCH_FAST_MODEL", "llama3.2:1b"),
+    "reason": os.environ.get("OLLAMA_LAUNCH_REASON_MODEL", "deepseek-r1"),
+    "embed": os.environ.get("OLLAMA_LAUNCH_EMBED_MODEL", "nomic-embed-text"),
+}
+
+WRAPPER_COMMANDS = {
+    "-h",
+    "--help",
+    "up",
+    "down",
+    "build",
+    "status",
+    "profiles",
+    "install-defaults",
+    "launch",
+    "list-remote",
+    "shell",
+    "update-models",
+}
+
+
+def debug(message: str) -> None:
+    if DEBUG_ENABLED:
+        print(f"DEBUG: {message}", file=sys.stderr)
+
+
+def resolve_script_dir() -> Path:
+    return Path(__file__).resolve().parent
+
+
+SCRIPT_DIR = resolve_script_dir()
+ROOT = SCRIPT_DIR.parent
+
+COMPOSE_DIR = Path(os.environ.get("OLLAMA_COMPOSE_DIR", str(ROOT))).resolve()
+COMPOSE_FILE = COMPOSE_DIR / "docker-compose.yaml"
+COMPOSE_BASE_CMD = ["docker", "compose", "-p", PROJECT_NAME, "-f", str(COMPOSE_FILE)]
+
+
+def ensure_compose_file() -> None:
+    if not COMPOSE_FILE.is_file():
+        print(f"ERROR: docker-compose.yaml not found at: {COMPOSE_FILE}", file=sys.stderr)
+        print(
+            "Hint: set OLLAMA_COMPOSE_DIR to the folder containing docker-compose.yaml",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+
+def is_tty() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def run_cmd(
+    cmd: list[str],
+    *,
+    check: bool = True,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    debug(f"run_cmd: {' '.join(cmd)} capture_output={capture_output}")
+    return subprocess.run(
+        cmd,
+        check=check,
+        text=True,
+        capture_output=capture_output,
+    )
+
+
+def exec_cmd(cmd: list[str]) -> None:
+    debug(f"exec_cmd: {' '.join(cmd)}")
+    os.execvp(cmd[0], cmd)
+
+
+def compose_build_cmd(*args: str) -> list[str]:
+    return [*COMPOSE_BASE_CMD, *args]
+
+
+def compose_exec_cmd(command: list[str]) -> list[str]:
+    cmd = [*COMPOSE_BASE_CMD, "exec"]
+    if not is_tty():
+        cmd.append("-T")
+    cmd.append(SERVICE)
+    cmd.extend(command)
+    return cmd
+
+
+def compose_exec(
+    command: list[str],
+    *,
+    check: bool = True,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    return run_cmd(compose_exec_cmd(command), check=check, capture_output=capture_output)
+
+
+def compose_exec_or_exec(command: list[str]) -> None:
+    exec_cmd(compose_exec_cmd(command))
+
+
+def is_known_wrapper_command(argv: list[str]) -> bool:
+    return bool(argv) and argv[0] in WRAPPER_COMMANDS
+
+
+def ensure_service_exists() -> None:
+    result = run_cmd(
+        compose_build_cmd("config", "--services"),
+        capture_output=True,
+        check=True,
+    )
+    services = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    if SERVICE not in services:
+        print(
+            f"ERROR: service '{SERVICE}' not found in compose file: {COMPOSE_FILE}",
+            file=sys.stderr,
+        )
+        print("Available services:", file=sys.stderr)
+        for service in sorted(services):
+            print(service, file=sys.stderr)
+        raise SystemExit(2)
+
+
+def is_service_running() -> bool:
+    result = run_cmd(
+        compose_build_cmd("ps", "-q", SERVICE),
+        capture_output=True,
+        check=True,
+    )
+    return bool(result.stdout.strip())
+
+
+def ensure_service_running() -> None:
+    ensure_service_exists()
+    if not is_service_running():
+        run_cmd(compose_build_cmd("up", "-d", SERVICE), check=True)
+
+
+def run_ollama(args: list[str]) -> None:
+    ensure_service_running()
+    compose_exec_or_exec(["ollama", *args])
+
+
+def ensure_model_exists(model: str) -> bool:
+    ensure_service_running()
+    result = compose_exec(["ollama", "list"], check=True, capture_output=True)
+    for i, line in enumerate(result.stdout.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        if i == 0 and line.startswith("NAME"):
+            continue
+        parts = line.split()
+        if parts and parts[0] == model:
+            return True
+    return False
+
+
+def ensure_model_pulled(model: str) -> None:
+    if ensure_model_exists(model):
+        return
+    print(f"Model '{model}' is not available locally. Pulling it now...")
+    compose_exec(["ollama", "pull", model], check=True)
+
+
+def get_default_models() -> list[str]:
+    env_models = os.environ.get("OLLAMA_DEFAULT_MODELS", "").strip()
+    if env_models:
+        return shlex.split(env_models)
+
+    return [
+        "llama3.2:1b",
+        "gemma4:latest",
+        "gemma4:e2b",
+        "gemma3:1b",
+        "gemma3:4b",
+        "phi4-mini",
+        "phi4-reasoning",
+        "phi4-mini-reasoning",
+        "phi3-mini",
+        "deepseek-r1",
+        "qwen3.6:latest",
+        "mistral:latest",
+        "mistral-nemo:latest",
+        "nomic-embed-text-v2-moe",
+    ]
+
+
+def extract_models(
+    html: str,
+    *,
+    limit: int,
+    with_description: bool,
+    filter_capabilities: list[str] | None = None,
+    sort_by: str = "order",
+) -> None:
+    soup = BeautifulSoup(html, "html.parser")
+
+    columns = ["model_name", "capabilities", "sizes", "updated"]
+    if with_description:
+        columns.append("description")
+
+    rows: list[dict[str, Any]] = []
+    normalized_filter_capabilities = {
+        item.strip().lower() for item in (filter_capabilities or []) if item.strip()
+    }
+
+    order = 1
+
+    for li in soup.find_all("li", attrs={"x-test-model": True}):
+        if not isinstance(li, Tag):
+            continue
+
+        name_div = li.find("div", attrs={"title": True})
+        model_name = name_div.get("title", "").strip() if isinstance(name_div, Tag) else "N/A"
+
+        desc_p = li.find("p", class_="max-w-lg")
+        description = desc_p.get_text(strip=True) if isinstance(desc_p, Tag) else ""
+
+        capabilities: list[str] = []
+        container = li.find("div", class_="flex flex-wrap space-x-2")
+        if isinstance(container, Tag):
+            for span in container.find_all("span", class_="inline-flex", recursive=False):
+                if not isinstance(span, Tag):
+                    continue
+                if span.has_attr("x-test-size"):
+                    continue
+                text = span.get_text(strip=True)
+                if text:
+                    capabilities.append(text)
+
+        sizes = [
+            span.get_text(strip=True)
+            for span in li.find_all("span", attrs={"x-test-size": True})
+            if isinstance(span, Tag)
+        ]
+
+        update_span = li.find("span", attrs={"x-test-updated": True})
+        updated = update_span.get_text(strip=True) if isinstance(update_span, Tag) else "N/A"
+
+        capability_set = {cap.lower() for cap in capabilities}
+        if normalized_filter_capabilities and not capability_set.intersection(
+            normalized_filter_capabilities
+        ):
+            continue
+
+        rows.append(
+            {
+                "order": order,
+                "model_name": model_name,
+                "capabilities": capabilities,
+                "sizes": sizes,
+                "updated": updated,
+                "description": description,
+            }
+        )
+        order += 1
+
+    if not rows:
+        print("No remote models found.")
+        return
+
+    def get_row_order(row: dict[str, Any], fallback: int) -> int:
+        value = row.get("order")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+        return fallback
+
+    def sort_key(item: tuple[int, dict[str, Any]]) -> tuple[object, ...]:
+        fallback_index, row = item
+        model_name = str(row.get("model_name", "")).lower()
+        capabilities = [str(x).lower() for x in row.get("capabilities", [])]
+        sizes = [str(x).lower() for x in row.get("sizes", [])]
+        updated = str(row.get("updated", "")).lower()
+        order_value = get_row_order(row, fallback_index)
+
+        if sort_by == "capability":
+            return (",".join(capabilities), model_name, order_value)
+
+        if sort_by == "size":
+            return (len(sizes), ",".join(sizes), model_name, order_value)
+
+        if sort_by == "date":
+            return (updated, model_name, order_value)
+
+        if sort_by == "name":
+            return (model_name, order_value)
+
+        return (order_value,)
+
+    limited_rows = rows[:limit] if limit > 0 else rows
+
+    limited_rows = [row for _, row in sorted(enumerate(limited_rows, start=1), key=sort_key)]
+
+    printable_rows: list[list[str]] = []
+    for row in limited_rows:
+        printable_row = [
+            str(row["model_name"]),
+            ", ".join(row["capabilities"]),
+            ", ".join(row["sizes"]),
+            str(row["updated"]),
+        ]
+        if with_description:
+            printable_row.append(str(row["description"]))
+        printable_rows.append(printable_row)
+
+    col_count = len(columns)
+    col_widths = [
+        max(len(columns[i]), *(len(str(row[i])) for row in printable_rows))
+        for i in range(col_count)
+    ]
+
+    if with_description:
+        header = "  ".join(
+            str(item).ljust(col_widths[i]) for i, item in enumerate(columns[:-1])
+        )
+        print(header)
+        print()
+        for row in printable_rows:
+            print(
+                "  ".join(
+                    str(item).ljust(col_widths[i]) for i, item in enumerate(row[:-1])
+                )
+            )
+            print(row[-1])
+            print()
+    else:
+        print("  ".join(str(item).ljust(col_widths[i]) for i, item in enumerate(columns)))
+        for row in printable_rows:
+            print("  ".join(str(item).ljust(col_widths[i]) for i, item in enumerate(row)))
+
+
+def cmd_build() -> None:
+    run_cmd(["docker", "pull", "ollama/ollama:latest"], check=True)
+    run_cmd(compose_build_cmd("build"), check=True)
+
+
+def cmd_show_status() -> None:
+    ensure_service_exists()
+
+    print(f"Compose file : {COMPOSE_FILE}")
+    print(f"Project name : {PROJECT_NAME}")
+    print(f"Service      : {SERVICE}")
+    print()
+
+    print("Container status:")
+    try:
+        run_cmd(compose_build_cmd("ps", SERVICE), check=True)
+    except subprocess.CalledProcessError:
+        pass
+    print()
+
+    if is_service_running():
+        print("Ollama models:")
+        try:
+            compose_exec(["ollama", "list"], check=True)
+        except subprocess.CalledProcessError:
+            pass
+        print()
+        print("Running models:")
+        try:
+            compose_exec(["ollama", "ps"], check=True)
+        except subprocess.CalledProcessError:
+            pass
+    else:
+        print(f"Service '{SERVICE}' is not running.")
+
+
+def cmd_launch_model(profile: str, prompt_parts: list[str]) -> None:
+    model = LAUNCH_MODELS.get(profile)
+    if not model:
+        print(f"ERROR: unknown launch profile '{profile}'", file=sys.stderr)
+        print("Run 'profiles' to see available profiles.", file=sys.stderr)
+        raise SystemExit(2)
+
+    ensure_service_running()
+    ensure_model_pulled(model)
+
+    print(f"Launching profile '{profile}' with model '{model}'...")
+
+    cmd = ["ollama", "run", model]
+    if prompt_parts:
+        cmd.append(" ".join(prompt_parts))
+    compose_exec_or_exec(cmd)
+
+
+def cmd_print_profiles() -> None:
+    print("Available launch profiles:")
+    for name, model in LAUNCH_MODELS.items():
+        print(f"  {name:<10} -> {model}")
+
+
+def cmd_install_defaults() -> None:
+    ensure_service_running()
+
+    defaults = get_default_models()
+    print(f"Pulling default models into Ollama volume for service '{SERVICE}'...")
+    print("Models:")
+    for model in defaults:
+        print(f"  {model}")
+    print()
+
+    for model in defaults:
+        print(f"==> ollama pull {model}")
+        compose_exec(["ollama", "pull", model], check=True)
+        print()
+
+    print("Done. Current tags:")
+    try:
+        compose_exec(["ollama", "list"], check=True)
+    except subprocess.CalledProcessError:
+        pass
+
+
+def cmd_list_remote_models(
+    *,
+    limit: int,
+    with_description: bool,
+    filter_capabilities: list[str] | None = None,
+    sort_by: str = "order",
+) -> None:
+    response = requests.get("https://ollama.com/library", timeout=20)
+    response.raise_for_status()
+    extract_models(
+        response.text,
+        limit=limit,
+        with_description=with_description,
+        filter_capabilities=filter_capabilities,
+        sort_by=sort_by,
+    )
+
+
+def cmd_shell() -> None:
+    ensure_service_running()
+    compose_exec_or_exec(["bash"])
+
+
+def get_list_of_installed_models() -> list[str]:
+    ensure_service_running()
+    response = compose_exec(["ollama", "list"], check=True, capture_output=True)
+
+    model_names: list[str] = []
+    for i, line in enumerate(response.stdout.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        if i == 0 and line.startswith("NAME"):
+            continue
+        parts = line.split()
+        if parts:
+            model_names.append(parts[0])
+
+    return model_names
+
+
+def cmd_update_models() -> None:
+    models = get_list_of_installed_models()
+    for model in models:
+        print(f"Update '{model}'")
+        compose_exec(["ollama", "pull", model], check=True)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="ollama",
+        description="Docker Compose wrapper for Ollama",
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser("up", help="Start the Ollama service")
+    subparsers.add_parser("down", help="Stop the Ollama service")
+    subparsers.add_parser("build", help="Pull latest base image and rebuild the Ollama service")
+    subparsers.add_parser("status", help="Show container and model status")
+    subparsers.add_parser("profiles", help="List launch profiles")
+    subparsers.add_parser("install-defaults", help="Pull the default model set into the Ollama volume")
+    subparsers.add_parser("shell", help="Open a shell inside the Ollama container")
+    subparsers.add_parser("update-models", help="Pull the latest version for all installed models")
+
+    launch_parser = subparsers.add_parser("launch", help="Launch a predefined profile")
+    launch_parser.add_argument("profile", choices=sorted(LAUNCH_MODELS.keys()), help="Launch profile name")
+    launch_parser.add_argument("prompt", nargs="*", help="Optional prompt text")
+
+    remote_parser = subparsers.add_parser("list-remote", help="List models from the Ollama library website")
+    remote_parser.add_argument("--limit", type=int, default=25, help="Maximum number of rows to show; use 0 for all")
+    remote_parser.add_argument("--with-description", action="store_true", help="Print the description below each row")
+    remote_parser.add_argument(
+        "--filter",
+        dest="filter_capabilities",
+        action="append",
+        default=[],
+        help="Filter by capability; may be specified multiple times",
+    )
+    remote_parser.add_argument(
+        "--sort-by",
+        choices=["order", "capability", "size", "date", "name"],
+        default="order",
+        help="Sort output by capability, size, date, name, or keep original order",
+    )
+
+    return parser
+
+
+def main() -> None:
+    ensure_compose_file()
+
+    argv = sys.argv[1:]
+    parser = build_parser()
+
+    if not argv:
+        parser.print_help()
+        raise SystemExit(0)
+
+    if not is_known_wrapper_command(argv):
+        run_ollama(argv)
+        return
+
+    args = parser.parse_args(argv)
+
+    if args.command is None:
+        parser.print_help()
+        raise SystemExit(0)
+
+    if args.command == "up":
+        run_cmd(compose_build_cmd("up", "-d"), check=True)
+    elif args.command == "down":
+        run_cmd(compose_build_cmd("down"), check=True)
+    elif args.command == "build":
+        cmd_build()
+    elif args.command == "status":
+        cmd_show_status()
+    elif args.command == "shell":
+        cmd_shell()
+    elif args.command == "profiles":
+        cmd_print_profiles()
+    elif args.command == "install-defaults":
+        cmd_install_defaults()
+    elif args.command == "launch":
+        cmd_launch_model(args.profile, args.prompt)
+    elif args.command == "list-remote":
+        cmd_list_remote_models(
+            limit=args.limit,
+            with_description=args.with_description,
+            filter_capabilities=args.filter_capabilities,
+            sort_by=args.sort_by,
+        )
+    elif args.command == "update-models":
+        cmd_update_models()
+    else:
+        parser.error(f"Unsupported command: {args.command}")
+
+
+if __name__ == "__main__":
+    main()

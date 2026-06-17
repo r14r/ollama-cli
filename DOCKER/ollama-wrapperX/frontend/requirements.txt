@@ -1,0 +1,15 @@
+streamlit
+streamlit-antd-components
+
+click
+
+watchdog
+
+httpx
+
+requests
+types-requests
+
+ollama
+
+bs4

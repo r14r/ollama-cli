@@ -1,0 +1,114 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": true,
+			"**/.svn": true,
+			"**/.hg": true,
+			"**/.DS_Store": true,
+			"**/Thumbs.db": true,
+			"**/__pycache__": true,
+			"**/.venv": true,
+			".envrc": true,
+			".set_env.sh": true,
+			".vscode.bkp": true,
+			".vscode.ext": true,
+			".vscode.usr": true,
+			"**/.vscode.ext": true,
+			"**/.vscode.usr": true,
+			"Workspace.code-workspace": true
+		},
+		"explorerExclude.backup": {},
+		"todo-tree.general.tags": [
+			"BUG",
+			"HACK",
+			"FIXME",
+			"TODO",
+			"XXX",
+			"[ ]",
+			"[x]",
+			"ERROR"
+		],
+		"python-envs.pythonProjects": [
+			{
+				"path": "",
+				"envManager": "ms-python.python:venv",
+				"packageManager": "ms-python.python:pip"
+			}
+		],
+		"git.ignoreLimitWarning": true
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "S: App",
+				"type": "debugpy",
+				"request": "launch",
+				"module": "streamlit",
+				"python": "${workspaceFolder}/.venv/python/bin/python",
+				"cwd": "${workspaceFolder}",
+				"args": [
+					"run",
+					"Home.py"
+				]
+			},
+			{
+				"name": "ollama list",
+				"type": "debugpy",
+				"request": "launch",
+				"program": "bin/ollama",
+				"python": "${workspaceFolder}/.venv/python/bin/python",
+				"cwd": "${workspaceFolder}",
+				"args": [
+					"list"
+				]
+			}
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "echo workspace",
+				"type": "shell",
+				"command": "echo Workspace Folder is: ${workspaceFolder}"
+			},
+			{
+				"label": "My Task",
+				"command": "echo hello",
+				"type": "shell",
+				"args": [],
+				"problemMatcher": [
+					"$tsc"
+				],
+				"presentation": {
+					"reveal": "always"
+				},
+				"group": "build"
+			}
+		]
+	},
+	"extensions": {
+		"recommendations": [
+			"charliermarsh.ruff",
+			"gruntfuggly.todo-tree",
+			"ms-azuretools.vscode-containers",
+			"ms-python.debugpy",
+			"ms-python.python",
+			"ms-python.vscode-pylance",
+			"ms-vscode-remote.remote-containers",
+			"ms-vscode.live-server",
+			"onatm.open-in-new-window",
+			"peterschmalfeldt.explorer-exclude",
+			"davidanson.vscode-markdownlint",
+			"moshfeu.compare-folders",
+			"openai.chatgpt",
+			"github.copilot-chat"
+		]
+	}
+}

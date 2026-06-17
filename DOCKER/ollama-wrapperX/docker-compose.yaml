@@ -1,0 +1,114 @@
+services:
+  ollama:
+    container_name: ai-tools-ollama-ollama
+
+    build:
+      context: .
+      dockerfile: services/ollama/Dockerfile
+      args:
+        ADMIN_USER: ${ADMIN_USER}
+        ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    restart: unless-stopped
+
+    ports:
+      - "${OLLAMA_PORT_PUBLIC}:${OLLAMA_PORT}"
+
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    volumes:
+      - ollama:/root/.ollama
+      - ./shared:/shared
+
+  gateway:
+    container_name: ai-tools-ollama-gateway
+
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+      args:
+        ADMIN_USER: ${ADMIN_USER}
+        ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    depends_on:
+      - ollama
+
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    ports:
+      - "${GATEWAY_PORT_PUBLIC}:${GATEWAY_PORT}"
+
+    volumes:
+      - gateway:/data
+
+    restart: unless-stopped
+
+  frontend:
+    container_name: ai-tools-ollama-frontend
+
+    build:
+      context: .
+      dockerfile: services/frontend/Dockerfile
+      args:
+        ADMIN_USER: ${ADMIN_USER}
+        ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    restart: unless-stopped
+
+    ports:
+      - "${OLLAMA_ADMIN_PORT_PUBLIC}:8501"
+
+    depends_on:
+      - gateway
+
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL}
+      OLLAMA_URL_PUBLIC: ${OLLAMA_URL_PUBLIC}
+      OLLAMA_PORT: ${OLLAMA_PORT}
+      OLLAMA_PORT_PUBLIC: ${OLLAMA_PORT_PUBLIC}
+      GATEWAY_URL: ${GATEWAY_URL}
+      GATEWAY_URL_PUBLIC: ${GATEWAY_URL_PUBLIC}
+      GATEWAY_PORT: ${GATEWAY_PORT}
+      GATEWAY_PORT_PUBLIC: ${GATEWAY_PORT_PUBLIC}
+      #
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+  openwebui:
+    container_name: ai-tools-ollama-openwebui
+
+    build:
+      context: .
+      dockerfile: services/openwebui/Dockerfile
+      args:
+        OPENWEBUI_IMAGE: ${OPENWEBUI_IMAGE}
+        ADMIN_USER: ${ADMIN_USER}
+        ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    restart: unless-stopped
+
+    ports:
+      - "${OPENWEBUI_PORT_PUBLIC}:8080"
+
+    depends_on:
+      - gateway
+
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+    volumes:
+      - ollama:/root/.ollama
+      - openwebui:/app/backend/data
+
+volumes:
+  ollama:
+  gateway: {}
+  openwebui: {}

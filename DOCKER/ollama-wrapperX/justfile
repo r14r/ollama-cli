@@ -1,0 +1,100 @@
+COMPOSE                := "docker compose -p ai-tools-ollama --env-file .env -f docker-compose.yaml"
+COMPOSE_MONITORING     := "docker compose -p ai-tools-ollama --env-file .env -f docker-compose.yaml -f docker-compose.monitoring.yaml"
+STACK_SERVICES         := "ollama gateway frontend openwebui"
+MONITORING_SERVICES    := "prometheus grafana cadvisor prometheus-dev node-exporter-dev alertmanager-dev cadvisor-dev grafana-dev"
+DEV_SERVICES           := "prometheus-dev node-exporter-dev alertmanager-dev cadvisor-dev grafana-dev"
+
+default: help
+
+help:
+	@just --list
+
+# -------------------------------------------------------------------
+# Lifecycle helpers
+# -------------------------------------------------------------------
+up:
+	@echo "Building + starting the Ollama stack"
+	{{COMPOSE}} up --build --detach {{STACK_SERVICES}}
+
+down:
+	@echo "Stopping and pruning every service"
+	{{COMPOSE}} down --remove-orphans
+
+restart:
+	@echo "Rebuilding and restarting the default stack"
+	{{COMPOSE}} down --remove-orphans
+	{{COMPOSE}} up --build --detach {{STACK_SERVICES}}
+
+up-with-monitoring:
+	@echo "Building + starting Ollama + monitoring"
+	{{COMPOSE_MONITORING}} up --build --detach {{STACK_SERVICES}} {{MONITORING_SERVICES}}
+
+down-with-monitoring:
+	@echo "Stopping Ollama + monitoring services"
+	{{COMPOSE_MONITORING}} down --remove-orphans
+
+# -------------------------------------------------------------------
+# Logging
+# -------------------------------------------------------------------
+logs:
+	{{COMPOSE}} logs --follow --tail=200
+
+gateway-logs:
+	{{COMPOSE}} logs --follow --tail=200 gateway
+
+ollama-logs:
+	{{COMPOSE}} logs --follow --tail=200 ollama
+
+frontend-logs:
+	{{COMPOSE}} logs --follow --tail=200 frontend
+
+openwebui-logs:
+	{{COMPOSE}} logs --follow --tail=200 openwebui
+
+prometheus-logs:
+	{{COMPOSE_MONITORING}} logs --follow --tail=200 prometheus
+
+grafana-logs:
+	{{COMPOSE_MONITORING}} logs --follow --tail=200 grafana
+
+cadvisor-logs:
+	{{COMPOSE_MONITORING}} logs --follow --tail=200 cadvisor
+
+# -------------------------------------------------------------------
+# Build & image helpers
+# -------------------------------------------------------------------
+build:
+	{{COMPOSE}} build --pull {{STACK_SERVICES}}
+
+build-with-monitoring:
+	{{COMPOSE_MONITORING}} build --pull {{STACK_SERVICES}} {{MONITORING_SERVICES}}
+
+pull:
+	{{COMPOSE}} pull --include-deps {{STACK_SERVICES}}
+
+compose-ps:
+	{{COMPOSE}} ps
+
+compose-images:
+	{{COMPOSE}} images
+
+gateway-shell:
+	{{COMPOSE}} exec -it gateway /bin/bash
+
+# -------------------------------------------------------------------
+# Infra-dev helpers
+# -------------------------------------------------------------------
+dev-up:
+	{{COMPOSE_MONITORING}} up --build --detach {{DEV_SERVICES}}
+
+dev-down:
+	{{COMPOSE_MONITORING}} stop {{DEV_SERVICES}}
+	{{COMPOSE_MONITORING}} rm -f {{DEV_SERVICES}}
+
+dev-logs:
+	{{COMPOSE_MONITORING}} logs --follow --tail=200 {{DEV_SERVICES}}
+
+dev-restart:
+	{{COMPOSE_MONITORING}} stop {{DEV_SERVICES}}
+	{{COMPOSE_MONITORING}} rm -f {{DEV_SERVICES}}
+	{{COMPOSE_MONITORING}} up --build --detach {{DEV_SERVICES}}
