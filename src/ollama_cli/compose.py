@@ -30,20 +30,20 @@ def resolve_compose_dir() -> Path:
         return Path(env_dir).resolve()
 
     hardcoded = Path(
-        "/Users/Shared/CLOUD/Projekte/CLIs/ollama-cli/DOCKER/ollama-wrapper"
+        "/Users/Shared/CLOUD/Projekte/CLIs/ollama-cli/docker"
     )
     if hardcoded.exists() and (hardcoded / "docker-compose.yaml").is_file():
         return hardcoded
 
     try:
-        source_dir = Path(__file__).resolve().parents[2] / "DOCKER" / "ollama-wrapper"
+        source_dir = Path(__file__).resolve().parents[2] / "docker"
         if source_dir.exists() and (source_dir / "docker-compose.yaml").is_file():
             return source_dir
     except Exception:
         pass
 
     try:
-        bin_relative = Path(sys.argv[0]).resolve().parent / "DOCKER" / "ollama-wrapper"
+        bin_relative = Path(sys.argv[0]).resolve().parent / "docker"
         if bin_relative.exists() and (bin_relative / "docker-compose.yaml").is_file():
             return bin_relative
     except Exception:

@@ -33,10 +33,34 @@ def get_default_models() -> list[str]:
     """Get the list of default models to install."""
     import os
     import shlex
+    import sys
+    import configparser
+    from pathlib import Path
 
     env_models = os.environ.get("OLLAMA_DEFAULT_MODELS", "").strip()
     if env_models:
         return shlex.split(env_models)
+
+    config_file = Path.home() / ".ollama-cli" / "setup.yml"
+    if config_file.exists():
+        try:
+            import yaml
+            with open(config_file, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if data and isinstance(data, dict):
+                ollama_cfg = data.get("ollama")
+                if isinstance(ollama_cfg, dict):
+                    models_val = ollama_cfg.get("default_models")
+                    if isinstance(models_val, list):
+                        return [str(m).strip() for m in models_val if str(m).strip()]
+                    elif isinstance(models_val, str):
+                        if "," in models_val:
+                            return [m.strip() for m in models_val.split(",") if m.strip()]
+                        else:
+                            return [m.strip() for m in models_val.split() if m.strip()]
+        except Exception as e:
+            print(f"Warning: Failed to parse setup.yml: {e}", file=sys.stderr)
+
     return [
         "llama3.2:1b",
         "gemma4:latest",
@@ -46,13 +70,59 @@ def get_default_models() -> list[str]:
         "phi4-mini",
         "phi4-reasoning",
         "phi4-mini-reasoning",
-        "phi3-mini",
+        "phi3:mini",
         "deepseek-r1",
         "qwen3.6:latest",
         "mistral:latest",
         "mistral-nemo:latest",
         "nomic-embed-text-v2-moe",
     ]
+
+
+def get_group_models(group: str) -> list[str]:
+    """Get the list of models for a specific group from setup.yml."""
+    import sys
+    import yaml
+    from pathlib import Path
+
+    config_file = Path.home() / ".ollama-cli" / "setup.yml"
+    if not config_file.exists():
+        print(f"Error: Setup file does not exist at {config_file}. Run 'setup' command first.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        
+        models_val = None
+        group_key = f"{group}_models"
+        
+        if data and isinstance(data, dict):
+            ollama_cfg = data.get("ollama")
+            if isinstance(ollama_cfg, dict):
+                models_val = ollama_cfg.get(group_key)
+            
+            if models_val is None:
+                models_val = data.get(group_key)
+
+        if models_val is None:
+            print(f"Error: Group '{group_key}' not found in setup.yml", file=sys.stderr)
+            sys.exit(1)
+
+        if isinstance(models_val, list):
+            return [str(m).strip() for m in models_val if str(m).strip()]
+        elif isinstance(models_val, str):
+            if "," in models_val:
+                return [m.strip() for m in models_val.split(",") if m.strip()]
+            else:
+                return [m.strip() for m in models_val.split() if m.strip()]
+        else:
+            print(f"Error: Group '{group_key}' must be a list of models or a string", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"Error: Failed to parse setup.yml: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def get_list_of_installed_models() -> list[str]:

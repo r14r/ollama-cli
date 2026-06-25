@@ -2,7 +2,12 @@ README.md
 pyproject.toml
 src/ollama_cli/__init__.py
 src/ollama_cli/__main__.py
+src/ollama_cli/blobs.py
 src/ollama_cli/cli.py
+src/ollama_cli/compose.py
+src/ollama_cli/models.py
+src/ollama_cli/remote.py
+src/ollama_cli/utils.py
 src/ollama_cli.egg-info/PKG-INFO
 src/ollama_cli.egg-info/SOURCES.txt
 src/ollama_cli.egg-info/dependency_links.txt

@@ -35,6 +35,7 @@ WRAPPER_COMMANDS = {
     "build",
     "status",
     "version",
+    "--version",
     "profiles",
     "install-defaults",
     "launch",
@@ -200,7 +201,7 @@ def get_default_models() -> list[str]:
         "phi4-mini",
         "phi4-reasoning",
         "phi4-mini-reasoning",
-        "phi3-mini",
+        "phi3:mini",
         "deepseek-r1",
         "qwen3.6:latest",
         "mistral:latest",
@@ -485,8 +486,46 @@ def cmd_update_models() -> None:
         compose_exec(["ollama", "pull", model], check=True)
 
 
+class CustomArgumentParser(argparse.ArgumentParser):
+    def format_help(self) -> str:
+        help_text = super().format_help()
+        cmds = [
+            "up", "down", "build", "status", "version", "profiles",
+            "install-defaults", "launch", "list-remote", "shell",
+            "update-models"
+        ]
+        
+        def replace_choices(match):
+            text = match.group(0)
+            for cmd in cmds:
+                text = re.sub(fr"(?<=[{{,]){cmd}(?=[}},])", f"--{cmd}", text)
+            return text
+
+        help_text = re.sub(r"\{[a-zA-Z0-9_,-]+\}", replace_choices, help_text)
+
+        for cmd in cmds:
+            help_text = re.sub(fr"^    {cmd}(?=\s)", f"    --{cmd}", help_text, flags=re.MULTILINE)
+        return help_text
+
+    def format_usage(self) -> str:
+        usage = super().format_usage()
+        cmds = [
+            "up", "down", "build", "status", "version", "profiles",
+            "install-defaults", "launch", "list-remote", "shell",
+            "update-models"
+        ]
+        def replace_choices(match):
+            text = match.group(0)
+            for cmd in cmds:
+                text = re.sub(fr"(?<=[{{,]){cmd}(?=[}},])", f"--{cmd}", text)
+            return text
+
+        usage = re.sub(r"\{[a-zA-Z0-9_,-]+\}", replace_choices, usage)
+        return usage
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = CustomArgumentParser(
         prog="ollama",
         description="Docker Compose wrapper for Ollama",
     )
@@ -524,6 +563,23 @@ def main() -> None:
     ensure_compose_file()
 
     argv = sys.argv[1:]
+
+    # Translate option-like commands to internal commands
+    CMD_MAP = {
+        "--up": "up",
+        "--down": "down",
+        "--build": "build",
+        "--status": "status",
+        "--profiles": "profiles",
+        "--install-defaults": "install-defaults",
+        "--launch": "launch",
+        "--list-remote": "list-remote",
+        "--shell": "shell",
+        "--update-models": "update-models",
+    }
+
+    if argv and argv[0] in CMD_MAP:
+        argv[0] = CMD_MAP[argv[0]]
 
     parser = build_parser()
     debug(f"parser = {parser}")

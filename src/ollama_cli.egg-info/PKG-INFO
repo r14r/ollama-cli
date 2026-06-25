@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: ollama-cli
-Version: 1.0.2
+Version: 1.1.1
 Summary: Ollama blob + manifest inspector with orphan detection
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
@@ -12,4 +12,5 @@ Requires-Dist: shiv>=1.0.6
 Requires-Dist: requests>=2.31.0
 Requires-Dist: beautifulsoup4>=4.12.0
 
+# ollama-cli
 # ollama-cli

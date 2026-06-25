@@ -18,6 +18,7 @@ services:
       OLLAMA_HOST: 0.0.0.0
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      OLLAMA_CONTEXT_LENGTH: 32768
 
     volumes:
       - ollama:/root/.ollama

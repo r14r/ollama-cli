@@ -84,7 +84,7 @@ build-pyoxidizer: ask-version-increment
     echo "pyoxidizer" > dist/pyoxidizer/build_source.txt
 
 # Build standalone package (options: "pyinstaller", "shiv", "pyoxidizer", default: "pyoxidizer")
-build tool="pyoxidizer":
+build tool="shiv":
     @if [ "{{tool}}" = "shiv" ]; then \
         just build-shiv; \
     elif [ "{{tool}}" = "pyinstaller" ]; then \
@@ -104,7 +104,7 @@ run-shiv *args:
     {{BIN}}/python dist/shiv/{{APP}}.pyz {{args}}
 
 # Deploy compiled binary to DeveloperTools/bin (options: "pyinstaller", "shiv", "pyoxidizer", default: "pyoxidizer")
-deploy tool="pyoxidizer":
+deploy tool="shiv":
     @if [ "{{tool}}" = "pyinstaller" ]; then \
         if [ ! -f "dist/pyinstaller/{{APP}}" ]; then \
             just build pyinstaller; \
@@ -136,6 +136,7 @@ deploy tool="pyoxidizer":
         exit 1; \
     fi
     @{{DEPLOY_TARGET}} version
+    @{{DEPLOY_TARGET}} --version
 
 # Clean generated files
 clean:

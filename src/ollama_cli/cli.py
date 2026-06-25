@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+import sys
+import os
+
+if "--debug" in sys.argv:
+    os.environ["OLLAMA_DEBUG"] = "1"
+
 import argparse
 import contextlib
-import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +36,7 @@ WRAPPER_COMMANDS = {
     "build",
     "status",
     "version",
+    "--version",
     "profiles",
     "install-defaults",
     "launch",
@@ -42,6 +47,8 @@ WRAPPER_COMMANDS = {
     "models",
     "list",
     "ls",
+    "setup",
+    "install-models",
 }
 
 DEBUG_ENABLED = os.environ.get("OLLAMA_DEBUG", "").lower() in {"1", "true", "yes", "on"}
@@ -118,6 +125,26 @@ def cmd_install_defaults(args: argparse.Namespace) -> None:
         compose.compose_exec(["ollama", "list"], check=True)
 
 
+def cmd_install_models(args: argparse.Namespace) -> None:
+    """Pull model set of a specific group into the Ollama volume."""
+    compose.ensure_service_running()
+    group_models = models.get_group_models(args.group)
+    print(f"Pulling group '{args.group}' models into Ollama volume for service '{compose.SERVICE}'...")
+    print("Models:")
+    for model in group_models:
+        print(f"  {model}")
+    print()
+
+    for model in group_models:
+        print(f"==> ollama pull {model}")
+        compose.compose_exec(["ollama", "pull", model], check=True)
+        print()
+
+    print("Done. Current tags:")
+    with contextlib.suppress(subprocess.CalledProcessError):
+        compose.compose_exec(["ollama", "list"], check=True)
+
+
 def cmd_launch_model(args: argparse.Namespace) -> None:
     """Launch a predefined profile."""
     profile = args.profile
@@ -151,6 +178,36 @@ def cmd_update_models(args: argparse.Namespace) -> None:
     for model in installed:
         print(f"Update '{model}'")
         compose.compose_exec(["ollama", "pull", model], check=True)
+
+
+def cmd_setup(args: argparse.Namespace) -> None:
+    """Setup the environment and edit the configuration file."""
+    config_dir = Path.home() / ".ollama-cli"
+    config_file = config_dir / "setup.yml"
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    if not config_file.exists():
+        models_list = "\n".join(f"    - {m}" for m in models.get_default_models())
+        default_content = f"""ollama:
+  # List of default models to pull when running 'install-defaults'
+  default_models:
+{models_list}
+"""
+        config_file.write_text(default_content, encoding="utf-8")
+        print(f"Created setup file: {config_file}")
+    else:
+        print(f"Setup file already exists: {config_file}")
+
+    if args.edit:
+        editor = os.environ.get("EDITOR")
+        if editor:
+            subprocess.run([editor, str(config_file)])
+        else:
+            if sys.platform == "darwin":
+                subprocess.run(["open", "-e", str(config_file)])
+            else:
+                subprocess.run(["nano", str(config_file)])
 
 
 def cmd_list(args: argparse.Namespace) -> None:
@@ -264,26 +321,68 @@ def get_install_source() -> str:
         return "source"
 
 
+class CustomArgumentParser(argparse.ArgumentParser):
+    def format_help(self) -> str:
+        help_text = super().format_help()
+        cmds = [
+            "up", "down", "build", "status", "version", "profiles",
+            "install-defaults", "launch", "list-remote", "shell",
+            "update-models", "blobs", "models", "setup", "install-models"
+        ]
+        
+        # Replace subcommands inside choices list (e.g. {up,down,...})
+        def replace_choices(match):
+            text = match.group(0)
+            for cmd in cmds:
+                text = re.sub(fr"(?<=[{{,]){cmd}(?=[}},])", f"--{cmd}", text)
+            return text
+
+        help_text = re.sub(r"\{[a-zA-Z0-9_,-]+\}", replace_choices, help_text)
+
+        # Replace subcommands definition lines in positional arguments
+        for cmd in cmds:
+            help_text = re.sub(fr"^    {cmd}(?=\s)", f"    --{cmd}", help_text, flags=re.MULTILINE)
+        return help_text
+
+    def format_usage(self) -> str:
+        usage = super().format_usage()
+        cmds = [
+            "up", "down", "build", "status", "version", "profiles",
+            "install-defaults", "launch", "list-remote", "shell",
+            "update-models", "blobs", "models", "setup", "install-models"
+        ]
+        def replace_choices(match):
+            text = match.group(0)
+            for cmd in cmds:
+                text = re.sub(fr"(?<=[{{,]){cmd}(?=[}},])", f"--{cmd}", text)
+            return text
+
+        usage = re.sub(r"\{[a-zA-Z0-9_,-]+\}", replace_choices, usage)
+        return usage
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
-    parser = argparse.ArgumentParser(
+    parser = CustomArgumentParser(
         prog="ollama-cli",
         description=(
             "Extended Ollama CLI helper and Docker Compose wrapper.\n\n"
             "Wrapper commands:\n"
-            "  - up               : Start the Ollama service stack\n"
-            "  - down             : Stop the Ollama service stack\n"
-            "  - build            : Pull base image and rebuild the Ollama service\n"
-            "  - status           : Show container and model status\n"
-            "  - profiles         : List launch profiles\n"
-            "  - install-defaults : Pull default model set into the Ollama volume\n"
-            "  - launch           : Launch a predefined profile\n"
-            "  - list-remote      : List models from the Ollama library website\n"
-            "  - shell            : Open a shell inside the Ollama container\n"
-            "  - update-models    : Pull the latest version for all installed models\n"
-            "  - list / ls        : List local models with sort options\n"
-            "  - blobs            : Inspect blobs / manifests / orphans\n"
-            "  - models           : List models with blob counts and total sizes\n\n"
+            "  --up               : Start the Ollama service stack\n"
+            "  --down             : Stop the Ollama service stack\n"
+            "  --build            : Pull base image and rebuild the Ollama service\n"
+            "  --status           : Show container and model status\n"
+            "  --profiles         : List launch profiles\n"
+            "  --install-defaults : Pull default model set into the Ollama volume\n"
+            "  --launch           : Launch a predefined profile\n"
+            "  --list-remote      : List models from the Ollama library website\n"
+            "  --shell            : Open a shell inside the Ollama container\n"
+            "  --update-models    : Pull the latest version for all installed models\n"
+            "  --setup            : Set up environment and default models\n"
+            "  --install-models   : Pull a specific group of models from setup.yml\n"
+            "  --blobs            : Inspect blobs / manifests / orphans\n"
+            "  --models           : List models with blob counts and total sizes\n"
+            "  list / ls          : List local models with sort options\n\n"
             "Other commands are proxied directly to 'ollama' in the container."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -292,7 +391,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"ollama-cli version 1.0.2 ({get_install_source()})",
+        version=f"ollama-cli version 1.1.1 ({get_install_source()})",
     )
 
     parser.add_argument(
@@ -329,6 +428,22 @@ def build_parser() -> argparse.ArgumentParser:
     # ---------------- install-defaults ----------------
     subparsers.add_parser(
         "install-defaults", help="Pull the default model set into the Ollama volume"
+    )
+
+    # ---------------- install-models ----------------
+    p_install_models = subparsers.add_parser(
+        "install-models", help="Pull a specific group of models from setup.yml"
+    )
+    p_install_models.add_argument(
+        "--group", required=True, help="Model group name (e.g. reasoning, fast)"
+    )
+
+    # ---------------- setup ----------------
+    p_setup = subparsers.add_parser(
+        "setup", help="Set up environment and default models"
+    )
+    p_setup.add_argument(
+        "--edit", action="store_true", help="Edit the setup.yml file using your default editor"
     )
 
     # ---------------- update-models ----------------
@@ -368,8 +483,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_remote.add_argument(
         "--sort-by",
         choices=["order", "capability", "size", "date", "name"],
-        default="order",
+        default="name",
         help="Sort output by capability, size, date, name, or keep original order",
+    )
+    p_remote.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass/refresh the cache of remote models metadata",
+    )
+    p_remote.add_argument(
+        "--show-cache",
+        action="store_true",
+        help="Show the cache folder and list cached files",
+    )
+    p_remote.add_argument(
+        "--model",
+        default=None,
+        help="Specify model name to show cached JSON content (used with --show-cache)",
     )
 
     # ---------------- list ----------------
@@ -509,6 +639,8 @@ def build_parser() -> argparse.ArgumentParser:
         ("help", cmd_help),
         ("blobs", blobs.cmd_blobs),
         ("models", blobs.cmd_models),
+        ("setup", cmd_setup),
+        ("install-models", cmd_install_models),
     ]:
         p = subparsers.choices.get(name)
         if p:
@@ -523,8 +655,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def is_known_wrapper_command(argv: list[str]) -> bool:
-    """Check if the first argument is a known wrapper command."""
-    return bool(argv) and argv[0] in WRAPPER_COMMANDS
+    """Check if there is a local implementation of the command."""
+    # Find the command (first non-option argument, or first argument if all are options)
+    command = None
+    for arg in argv:
+        if not arg.startswith("-"):
+            command = arg
+            break
+    if not command and argv:
+        command = argv[0]
+    return command in WRAPPER_COMMANDS
 
 
 # ============================================================
@@ -539,13 +679,51 @@ def main() -> None:
     if "--debug" in argv:
         DEBUG_ENABLED = True
 
+    # Translate option-like commands to internal commands in argv (only for the command argument itself)
+    CMD_MAP = {
+        "--up": "up",
+        "--down": "down",
+        "--build": "build",
+        "--status": "status",
+        "--profiles": "profiles",
+        "--install-defaults": "install-defaults",
+        "--launch": "launch",
+        "--list-remote": "list-remote",
+        "--shell": "shell",
+        "--update-models": "update-models",
+        "--blobs": "blobs",
+        "--models": "models",
+        "--setup": "setup",
+        "--install-models": "install-models",
+    }
+    cmd_idx = -1
+    for i, arg in enumerate(argv):
+        if not arg.startswith("-") or arg in CMD_MAP:
+            cmd_idx = i
+            break
+    if cmd_idx == -1 and argv:
+        cmd_idx = 0
+
+    if cmd_idx != -1 and argv[cmd_idx] in CMD_MAP:
+        argv[cmd_idx] = CMD_MAP[argv[cmd_idx]]
+
     if argv and not is_known_wrapper_command(argv):
+        # Find command name for debug print
+        command = None
+        for arg in argv:
+            if not arg.startswith("-"):
+                command = arg
+                break
+        if not command:
+            command = argv[0]
+
         if DEBUG_ENABLED:
             print(
-                f"DEBUG: unrecognized command '{argv[0]}', proxying to container.",
+                f"DEBUG: unrecognized command '{command}', proxying to container.",
                 file=sys.stderr,
             )
-        compose.run_ollama(argv)
+        container_argv = [arg for arg in argv if arg != "--debug"]
+        compose.run_ollama(container_argv)
         return
 
     parser = build_parser()
