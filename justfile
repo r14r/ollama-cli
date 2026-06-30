@@ -140,7 +140,8 @@ deploy tool="shiv":
 
 # Clean generated files
 clean:
-    rm -rf build dist *.egg-info src/*.egg-info src/ollama_cli.egg-info .pytest_cache
+	rm -rf build dist *.egg-info src/*.egg-info src/ollama_cli.egg-info .pytest_cache
+	find . -name _pycache__ -delete
 
 # ------------------------------------------------------------
 # original Homebrew Tap and Release Ops
@@ -185,7 +186,21 @@ commit-push msg="Update ollama-cli formula":
 	git push
 	echo "Pushed formula changes."
 
+# Build standalone binary using Go
+build-go:
+	mkdir -p dist/go
+	cd go && go build -ldflags="-s -w" -o ../dist/go/ollama-cli .
+
+# Deploy Go binary to DeveloperTools/bin
+deploy-go: build-go
+	mkdir -p {{DEPLOY_DIR}}
+	cp dist/go/ollama-cli {{DEPLOY_TARGET}}
+	chmod +x {{DEPLOY_TARGET}}
+	echo "Deployed Go version to {{DEPLOY_TARGET}}"
+	@{{DEPLOY_TARGET}} --version
+
 release:
 	set -euo pipefail
 	just update-formula
 	just commit-push msg="Update ollama-cli sha"
+

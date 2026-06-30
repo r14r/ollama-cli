@@ -391,7 +391,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"ollama-cli version 1.1.1 ({get_install_source()})",
+        version=f"ollama-cli version 1.1.1",
     )
 
     parser.add_argument(
