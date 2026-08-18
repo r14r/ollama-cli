@@ -13,6 +13,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
 func GetCacheDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -39,7 +41,7 @@ func FetchAndCacheHTML(url string, cacheFile string, force bool) (string, error)
 	}
 
 	// Fetch from URL
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		// Try fallback to expired cache
 		if data, err := os.ReadFile(cacheFile); err == nil {
@@ -140,6 +142,7 @@ func ExtractModels(html string, limit int, withDesc bool, filterCaps []string, s
 			continue
 		}
 
+		var modelTags []TagRow
 		seenHrefs := make(map[string]bool)
 		doc.Find("a").Each(func(i int, s *goquery.Selection) {
 			href, _ := s.Attr("href")
@@ -193,7 +196,7 @@ func ExtractModels(html string, limit int, withDesc bool, filterCaps []string, s
 				caps = append(caps, "cloud")
 			}
 
-			tagsRows = append(tagsRows, TagRow{
+			row := TagRow{
 				ModelName:    fullTagName,
 				Capabilities: caps,
 				Sizes:        tagSuffix,
@@ -203,20 +206,23 @@ func ExtractModels(html string, limit int, withDesc bool, filterCaps []string, s
 				Updated:      updated,
 				Description:  bm["description"].(string),
 				Order:        order,
-			})
+			}
+			tagsRows = append(tagsRows, row)
+			modelTags = append(modelTags, row)
+		})
 
-			// Save model JSON
+		if len(modelTags) > 0 {
 			jsonFile := filepath.Join(cacheDir, modelName+".json")
 			jsonData := map[string]interface{}{
-				"model_name":     modelName,
-				"description":    bm["description"],
+				"model_name":        modelName,
+				"description":       bm["description"],
 				"base_capabilities": bm["capabilities"],
-				"tags": []TagRow{{ModelName: fullTagName, Capabilities: caps, Sizes: tagSuffix}},
+				"tags":              modelTags,
 			}
 			if b, err := json.MarshalIndent(jsonData, "", "  "); err == nil {
 				os.WriteFile(jsonFile, b, 0644)
 			}
-		})
+		}
 	}
 
 	return tagsRows, nil

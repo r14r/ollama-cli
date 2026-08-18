@@ -68,85 +68,12 @@ build-pyinstaller: ask-version-increment
     {{BIN}}/pyinstaller --onefile --name {{APP}} --distpath dist/pyinstaller src/ollama_cli/__main__.py
     echo "pyinstaller" > dist/pyinstaller/build_source.txt
 
-# Build standalone pyz using shiv
-build-shiv: ask-version-increment
-    rm -rf dist/shiv
-    mkdir -p dist/shiv
-    {{BIN}}/shiv -c {{APP}} -o dist/shiv/{{APP}}.pyz .
-    echo "shiv" > dist/shiv/build_source.txt
-
-# Build standalone binary using PyOxidizer
-build-pyoxidizer: ask-version-increment
-    rm -rf dist/pyoxidizer build/x86_64-apple-darwin
-    {{BIN}}/pyoxidizer build install
-    mkdir -p dist/pyoxidizer
-    cp -R build/x86_64-apple-darwin/*/install/ dist/pyoxidizer/
-    echo "pyoxidizer" > dist/pyoxidizer/build_source.txt
-
-# Build standalone package (options: "pyinstaller", "shiv", "pyoxidizer", default: "pyoxidizer")
-build tool="shiv":
-    @if [ "{{tool}}" = "shiv" ]; then \
-        just build-shiv; \
-    elif [ "{{tool}}" = "pyinstaller" ]; then \
-        just build-pyinstaller; \
-    elif [ "{{tool}}" = "pyoxidizer" ]; then \
-        just build-pyoxidizer; \
-    else \
-        echo "Error: Unknown build tool '{{tool}}'. Must be 'pyinstaller', 'shiv' or 'pyoxidizer'."; \
-        exit 1; \
-    fi
-
-# Build all standalone artifacts
-build-all: build-pyinstaller build-shiv build-pyoxidizer
-
-# Run generated shiv package
-run-shiv *args:
-    {{BIN}}/python dist/shiv/{{APP}}.pyz {{args}}
-
-# Deploy compiled binary to DeveloperTools/bin (options: "pyinstaller", "shiv", "pyoxidizer", default: "pyoxidizer")
-deploy tool="shiv":
-    @if [ "{{tool}}" = "pyinstaller" ]; then \
-        if [ ! -f "dist/pyinstaller/{{APP}}" ]; then \
-            just build pyinstaller; \
-        fi; \
-        mkdir -p {{DEPLOY_DIR}}; \
-        cp -f dist/pyinstaller/{{APP}} {{DEPLOY_TARGET}}; \
-        chmod +x {{DEPLOY_TARGET}}; \
-        echo "Deployed PyInstaller version to {{DEPLOY_TARGET}}"; \
-    elif [ "{{tool}}" = "shiv" ]; then \
-        if [ ! -f "dist/shiv/{{APP}}.pyz" ]; then \
-            just build shiv; \
-        fi; \
-        mkdir -p {{DEPLOY_DIR}}; \
-        cp -f dist/shiv/{{APP}}.pyz {{DEPLOY_TARGET}}; \
-        chmod +x {{DEPLOY_TARGET}}; \
-        echo "Deployed Shiv version to {{DEPLOY_TARGET}}"; \
-    elif [ "{{tool}}" = "pyoxidizer" ]; then \
-        if [ ! -d "dist/pyoxidizer" ]; then \
-            just build pyoxidizer; \
-        fi; \
-        mkdir -p {{DEPLOY_DIR}}; \
-        cp -f dist/pyoxidizer/{{APP}} {{DEPLOY_TARGET}}; \
-        rm -rf {{DEPLOY_DIR}}/lib; \
-        cp -R dist/pyoxidizer/lib {{DEPLOY_DIR}}/lib; \
-        chmod +x {{DEPLOY_TARGET}}; \
-        echo "Deployed PyOxidizer version to {{DEPLOY_TARGET}}"; \
-    else \
-        echo "Error: Unknown deploy tool '{{tool}}'. Must be 'pyinstaller', 'shiv' or 'pyoxidizer'."; \
-        exit 1; \
-    fi
-    @{{DEPLOY_TARGET}} version
-    @{{DEPLOY_TARGET}} --version
-
 # Clean generated files
 clean:
 	rm -rf build dist *.egg-info src/*.egg-info src/ollama_cli.egg-info .pytest_cache
 	find . -name _pycache__ -delete
 
 # ------------------------------------------------------------
-# original Homebrew Tap and Release Ops
-# ------------------------------------------------------------
-
 config:
 	echo "GITHUB_USER  = {{GITHUB_USER}}"
 	echo "TOOL_REPO    = {{TOOL_REPO}}"
@@ -187,12 +114,12 @@ commit-push msg="Update ollama-cli formula":
 	echo "Pushed formula changes."
 
 # Build standalone binary using Go
-build-go:
+build:
 	mkdir -p dist/go
 	cd go && go build -ldflags="-s -w" -o ../dist/go/ollama-cli .
 
 # Deploy Go binary to DeveloperTools/bin
-deploy-go: build-go
+deploy: build
 	mkdir -p {{DEPLOY_DIR}}
 	cp dist/go/ollama-cli {{DEPLOY_TARGET}}
 	chmod +x {{DEPLOY_TARGET}}

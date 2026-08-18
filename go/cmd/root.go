@@ -10,6 +10,9 @@ import (
 	"github.com/r14r/ollama-cli/internal/compose"
 )
 
+// AppVersion can be overridden at build time via -ldflags "-X github.com/r14r/ollama-cli/cmd.AppVersion=x.y.z"
+var AppVersion = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:   "ollama-cli",
 	Short: "Ollama CLI wrapper",
@@ -19,7 +22,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().BoolP("debug", "", false, "Enable debug log output")
-	rootCmd.Flags().String("version", "", "Show version")
+	rootCmd.Version = AppVersion
 
 	// Add subcommands
 	rootCmd.AddCommand(upCmd)
@@ -77,6 +80,12 @@ func proxyToOllama(args []string) error {
 }
 
 func Execute() error {
+	if len(os.Args) > 1 {
+		_, _, err := rootCmd.Find(os.Args[1:])
+		if err != nil && strings.Contains(err.Error(), "unknown command") {
+			return proxyToOllama(os.Args[1:])
+		}
+	}
 	return rootCmd.Execute()
 }
 

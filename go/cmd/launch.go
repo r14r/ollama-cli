@@ -40,9 +40,7 @@ var launchCmd = &cobra.Command{
 			model = defaults[profile]
 		}
 		if model == "" {
-			fmt.Fprintf(os.Stderr, "ERROR: unknown launch profile '%s'\n", profile)
-			fmt.Fprintf(os.Stderr, "Run 'profiles' to see available profiles.\n")
-			os.Exit(2)
+			return fmt.Errorf("unknown launch profile %q; run 'profiles' to see available profiles", profile)
 		}
 
 		if err := compose.EnsureServiceRunning(); err != nil {

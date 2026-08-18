@@ -132,13 +132,15 @@ func ComposeExecCapture(args []string) (string, error) {
 	if err := EnsureServiceRunning(); err != nil {
 		return "", err
 	}
-	cmd := BuildComposeCmd("exec")
+	cmdArgs := BuildComposeCmd("exec")
 	if !IsTTY() {
-		cmd = append(cmd, "-T")
+		cmdArgs = append(cmdArgs, "-T")
 	}
-	cmd = append(cmd, SERVICE)
-	cmd = append(cmd, args...)
-	return RunCmdCapture(cmd)
+	cmdArgs = append(cmdArgs, SERVICE)
+	cmdArgs = append(cmdArgs, args...)
+	c := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	out, err := c.Output()
+	return string(out), err
 }
 
 func fileExists(path string) bool {

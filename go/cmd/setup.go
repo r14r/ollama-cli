@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"runtime"
 
 	"github.com/spf13/cobra"
 	"github.com/r14r/ollama-cli/internal/config"
@@ -47,7 +47,7 @@ var setupCmd = &cobra.Command{
 			var editCmd *exec.Cmd
 			if editor != "" {
 				editCmd = exec.Command(editor, configFile)
-			} else if os.Getenv("GOOS") == "darwin" || strings.HasPrefix(os.Getenv("OSTYPE"), "darwin") {
+			} else if runtime.GOOS == "darwin" {
 				editCmd = exec.Command("open", "-e", configFile)
 			} else {
 				editCmd = exec.Command("nano", configFile)

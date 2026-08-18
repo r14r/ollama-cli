@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/r14r/ollama-cli/internal/remote"
+	"github.com/r14r/ollama-cli/internal/utils"
 )
 
 var listRemoteCmd = &cobra.Command{
@@ -101,7 +102,8 @@ var listRemoteCmd = &cobra.Command{
 		}
 
 		fmt.Println("Downloading main models list from https://ollama.com/library...")
-		resp, err := http.Get("https://ollama.com/library")
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Get("https://ollama.com/library")
 		if err != nil {
 			return err
 		}
@@ -166,7 +168,7 @@ var listRemoteCmd = &cobra.Command{
 			case "size":
 				return tagsRows[i].Sizes < tagsRows[j].Sizes
 			case "date":
-				return tagsRows[i].Updated < tagsRows[j].Updated
+				return utils.ParseRelativeTimeToSeconds(tagsRows[i].Updated) < utils.ParseRelativeTimeToSeconds(tagsRows[j].Updated)
 			case "name":
 				return tagsRows[i].ModelName < tagsRows[j].ModelName
 			default:

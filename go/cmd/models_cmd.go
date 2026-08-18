@@ -18,9 +18,12 @@ var modelsCmd = &cobra.Command{
 	Short: "List models with blob counts and total disk usage",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		modelsRoot, _ := cmd.Flags().GetString("models-root")
-		root := os.ExpandEnv(filepath.Join(os.Getenv("HOME"), modelsRoot))
-		if strings.HasPrefix(modelsRoot, "/") {
-			root = modelsRoot
+		home, _ := os.UserHomeDir()
+		root := modelsRoot
+		if strings.HasPrefix(modelsRoot, "~/") {
+			root = filepath.Join(home, modelsRoot[2:])
+		} else if !strings.HasPrefix(modelsRoot, "/") {
+			root = filepath.Join(home, modelsRoot)
 		}
 
 		manifestRoot := filepath.Join(root, "manifests", "registry.ollama.ai")

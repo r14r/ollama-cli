@@ -20,7 +20,7 @@ func EnsureModelExists(model string) bool {
 			continue
 		}
 		parts := strings.Fields(line)
-		if len(parts) > 0 && parts[0] == model {
+		if len(parts) > 0 && (parts[0] == model || parts[0] == model+":latest") {
 			return true
 		}
 	}

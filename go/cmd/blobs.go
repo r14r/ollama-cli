@@ -18,11 +18,12 @@ var blobsCmd = &cobra.Command{
 	Short: "Inspect blobs, manifests and orphans in the Ollama models directory",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		modelsRoot, _ := cmd.Flags().GetString("models-root")
-		modelsRoot = filepath.Join(os.ExpandEnv(modelsRoot))
-
-		root := os.ExpandEnv(filepath.Join(os.Getenv("HOME"), modelsRoot))
-		if !strings.HasPrefix(modelsRoot, "/") && !strings.HasPrefix(modelsRoot, "~") {
-			root = filepath.Join(os.ExpandEnv("~"), modelsRoot)
+		home, _ := os.UserHomeDir()
+		root := modelsRoot
+		if strings.HasPrefix(modelsRoot, "~/") {
+			root = filepath.Join(home, modelsRoot[2:])
+		} else if !strings.HasPrefix(modelsRoot, "/") {
+			root = filepath.Join(home, modelsRoot)
 		}
 
 		manifestRoot := filepath.Join(root, "manifests", "registry.ollama.ai")
@@ -128,6 +129,8 @@ var blobsCmd = &cobra.Command{
 				}
 			} else if sortBySize {
 				less = rows[i].SizeB < rows[j].SizeB
+			} else {
+				less = rows[i].Blob < rows[j].Blob
 			}
 			if reverse {
 				less = !less
@@ -145,8 +148,7 @@ var blobsCmd = &cobra.Command{
 		}
 
 		if len(columns) == 0 {
-			fmt.Fprintf(os.Stderr, "Error: no columns specified\n")
-			os.Exit(2)
+			return fmt.Errorf("no columns specified")
 		}
 
 		asCSV, _ := cmd.Flags().GetBool("as-csv")
