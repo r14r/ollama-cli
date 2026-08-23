@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,8 +11,12 @@ import (
 	"github.com/r14r/ollama-cli/internal/compose"
 )
 
-// AppVersion can be overridden at build time via -ldflags "-X github.com/r14r/ollama-cli/cmd.AppVersion=x.y.z"
-var AppVersion = "dev"
+//go:embed VERSION
+var embeddedVersion string
+
+// AppVersion is read from the VERSION file at compile time; override at
+// build time via -ldflags "-X github.com/r14r/ollama-cli/cmd.AppVersion=x.y.z"
+var AppVersion = strings.TrimSpace(embeddedVersion)
 
 var rootCmd = &cobra.Command{
 	Use:   "ollama-cli",

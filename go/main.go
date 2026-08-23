@@ -38,6 +38,8 @@ func main() {
 			args[i] = "setup"
 		} else if arg == "--install-models" {
 			args[i] = "install-models"
+		} else if arg == "--version" {
+			args[i] = "version"
 		}
 	}
 	os.Args = append([]string{os.Args[0]}, args...)

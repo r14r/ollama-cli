@@ -25,6 +25,12 @@ restart:
 	{{COMPOSE}} down --remove-orphans
 	{{COMPOSE}} up --build --detach {{STACK_SERVICES}}
 
+rebuild:
+	@echo "Pulling latest images and clean-building every service"
+	{{COMPOSE}} pull
+	{{COMPOSE}} build --no-cache --pull
+	{{COMPOSE}} up --detach
+
 up-with-monitoring:
 	@echo "Building + starting Ollama + monitoring"
 	{{COMPOSE_MONITORING}} up --build --detach {{STACK_SERVICES}} {{MONITORING_SERVICES}}
