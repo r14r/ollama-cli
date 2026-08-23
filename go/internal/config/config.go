@@ -85,6 +85,26 @@ func GetGroupModels(group string) ([]string, error) {
 	return models, nil
 }
 
+// GetModelsFromFile reads a top-level "models:" list from a YAML file
+// (used by `build --with-models` / `update-models --with-models`).
+func GetModelsFromFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read models file %s: %v", path, err)
+	}
+
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse models file %s: %v", path, err)
+	}
+
+	models := toStringSlice(raw["models"])
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no models found in %s (expected top-level 'models:' list)", path)
+	}
+	return models, nil
+}
+
 func toStringSlice(v interface{}) []string {
 	switch val := v.(type) {
 	case []interface{}:

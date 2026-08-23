@@ -81,6 +81,23 @@ services:
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
 
+  ollama-init:
+    container_name: ai-tools-ollama-init
+    image: ollama/ollama:latest
+    restart: "no"
+
+    depends_on:
+      - ollama
+
+    environment:
+      OLLAMA_HOST: ollama:${OLLAMA_PORT}
+
+    volumes:
+      - ${OLLAMA_MODELS_FILE:-./models.yaml}:/models.yaml:ro
+      - ./services/ollama-init/entrypoint.sh:/entrypoint.sh:ro
+
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+
   openwebui:
     container_name: ai-tools-ollama-openwebui
 
@@ -109,7 +126,48 @@ services:
       - ollama:/root/.ollama
       - openwebui:/app/backend/data
 
+  mongodb:
+    container_name: ai-tools-ollama-mongodb
+
+    image: mongo:7
+
+    restart: unless-stopped
+
+    volumes:
+      - mongodb:/data/db
+
+  librechat:
+    container_name: ai-tools-ollama-librechat
+
+    image: ${LIBRECHAT_IMAGE}
+
+    restart: unless-stopped
+
+    ports:
+      - "${LIBRECHAT_PORT_PUBLIC}:3080"
+
+    depends_on:
+      - mongodb
+      - ollama
+
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3080
+      MONGO_URI: mongodb://mongodb:27017/LibreChat
+      JWT_SECRET: ${LIBRECHAT_JWT_SECRET}
+      JWT_REFRESH_SECRET: ${LIBRECHAT_JWT_REFRESH_SECRET}
+      CREDS_KEY: ${LIBRECHAT_CREDS_KEY}
+      CREDS_IV: ${LIBRECHAT_CREDS_IV}
+      CONFIG_PATH: /app/librechat.yaml
+      ENDPOINTS: custom
+
+    volumes:
+      - ./services/librechat/librechat.yaml:/app/librechat.yaml:ro
+      - librechat_images:/app/client/public/images
+
 volumes:
   ollama:
   gateway: {}
   openwebui: {}
+  mongodb: {}
+  librechat_images: {}

@@ -1,0 +1,7 @@
+# Models pulled by the ollama-init service on `docker compose up`.
+# Override path via OLLAMA_MODELS_FILE, or pass --with-models <file> to
+# `ollama-cli build` / `ollama-cli update-models`.
+models:
+  - llama3.2:1b
+  - gemma3:1b
+  - phi4-mini
