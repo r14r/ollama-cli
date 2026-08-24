@@ -118,8 +118,8 @@ build:
 	mkdir -p dist/go
 	cd go && go build -ldflags="-s -w" -o ../dist/go/ollama-cli .
 
-# Deploy Go binary to DeveloperTools/bin
-deploy: build
+# Install Go binary to DeveloperTools/bin
+install: build
 	mkdir -p {{DEPLOY_DIR}}
 	cp dist/go/ollama-cli {{DEPLOY_TARGET}}
 	chmod +x {{DEPLOY_TARGET}}

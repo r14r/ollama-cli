@@ -14,7 +14,7 @@ This repo just went through a full rewrite: Python (`src/ollama_cli/`, PyInstall
 
 ```bash
 just build          # go build -> dist/go/ollama-cli
-just deploy          # build + copy to /Users/Shared/CLOUD/DeveloperTools/bin
+just install          # build + copy to /Users/Shared/CLOUD/DeveloperTools/bin
 cd go && go build -o ../dist/go/ollama-cli .   # direct build
 cd go && go run . <subcommand>                  # run from source
 cd go && go vet ./...
